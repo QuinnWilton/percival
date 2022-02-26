@@ -106,6 +106,7 @@ pub fn lexer() -> BoxedParser<'static, char, Vec<(Token, Span)>, Simple<char>> {
         just::<_, _, Simple<char>>("."),
         just::<_, _, Simple<char>>(","),
         just::<_, _, Simple<char>>("="),
+        just::<_, _, Simple<char>>("!"),
     ));
 
     let token = choice((
@@ -209,10 +210,15 @@ pub fn parser() -> BoxedParser<'static, Token, Program, Simple<Token>> {
         .then(value)
         .labelled("binding");
 
+    let negation = just(Ctrl("!"))
+        .ignore_then(fact.clone())
+        .labelled("negation");
+
     let clause = choice((
         fact.clone().map(Clause::Fact),
         expr.map(Clause::Expr),
         binding.map(|(name, value)| Clause::Binding(name, value)),
+        negation.map(|fact| Clause::Negation(fact)),
     ))
     .labelled("clause");
 

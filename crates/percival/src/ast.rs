@@ -29,6 +29,8 @@ pub enum Clause {
     Expr(String),
     /// Local variable binding within a rule.
     Binding(String, Value),
+    /// Stratified negation of a fact
+    Negation(Fact),
 }
 
 /// Literal part of a Horn clause, written in terms of relations.
@@ -106,7 +108,7 @@ impl Clause {
     /// Returns all relations referenced by this clause.
     pub fn deps(&self) -> BTreeSet<String> {
         match self {
-            Clause::Fact(fact) => {
+            Clause::Fact(fact) | Clause::Negation(fact) => {
                 let mut deps = BTreeSet::new();
                 deps.insert(fact.name.clone());
                 for value in fact.props.values() {

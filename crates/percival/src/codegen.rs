@@ -229,7 +229,7 @@ fn make_indices(prog: &Program) -> BTreeSet<Index> {
         clause: &'a Clause,
     ) {
         match clause {
-            Clause::Fact(fact) => {
+            Clause::Fact(fact) | Clause::Negation(fact) => {
                 for value in fact.props.values() {
                     walk_value(indices, vars, value);
                 }
@@ -538,14 +538,30 @@ fn cmp_rule_incremental(
     let mut ctx = ctx.clone();
 
     let mut clauses = Vec::new();
-    for (i, clause) in rule.clauses.iter().enumerate() {
+    for (i, clause) in rule
+        .clauses
+        .iter()
+        .filter(|e| !matches!(e, Clause::Negation(_)))
+        .enumerate()
+    {
         let only_update = update_position == Some(i);
         clauses.push(cmp_clause(&mut ctx, clause, only_update, false)?);
+    }
+
+    let mut negations = Vec::new();
+    for (_, negation) in rule
+        .clauses
+        .iter()
+        .filter(|e| matches!(e, Clause::Negation(_)))
+        .enumerate()
+    {
+        negations.push(cmp_clause(&mut ctx, negation, true, false)?);
     }
 
     let goal = format!(
         "
 const {goal} = {imm}.Map({goal_obj});
+{negations}
 if (!{set}.includes({goal})) {new}.add({goal});
 ",
         goal = VAR_GOAL,
@@ -553,6 +569,7 @@ if (!{set}.includes({goal})) {new}.add({goal});
         goal_obj = cmp_fields(&ctx, &rule.goal.props)?,
         set = ctx.get(&VarId::Set(rule.goal.name.clone())).unwrap(),
         new = ctx.get(&VarId::New(rule.goal.name.clone())).unwrap(),
+        negations = negations.join("\n"),
     );
 
     let mut code = String::from("{\n");
@@ -656,6 +673,27 @@ for (const {obj} of {index}.get({imm}.Map({bindings})) ?? []) {{
             }
             *ctx = ctx.add(VarId::Var(name.clone()), name.clone());
             Ok(format!("{{\nconst {} = {};", name, cmp_value(ctx, value)?))
+        }
+
+        Clause::Negation(fact) => {
+            if is_subquery && ctx.results.contains(&fact.name) {
+                return Err(Error::CircularReference(fact.name.clone()));
+            }
+
+            let set_prev = ctx.get(&VarId::Set(fact.name.clone()))?;
+            let set_new = ctx.get(&VarId::New(fact.name.clone()))?;
+
+            let code = format!(
+                "
+if ({set_prev}.includes({goal}) || {set_new}.includes({goal})) {{
+    continue
+}}
+",
+                goal = VAR_GOAL,
+                set_prev = set_prev,
+                set_new = set_new
+            );
+            Ok(code.trim().into())
         }
     }
 }
