@@ -11,6 +11,15 @@ use thiserror::Error;
 
 use crate::ast::{Aggregate, Clause, Literal, Program, Rule, Value};
 
+extern crate web_sys;
+
+// A macro to provide `println!(..)`-style syntax for `console.log` logging.
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        web_sys::console::log_1(&format!( $( $t )* ).into());
+    }
+}
+
 const VAR_DEPS: &str = "__percival_deps";
 const VAR_IMMUTABLE: &str = "__percival.Immutable";
 const VAR_LOAD: &str = "__percival.load";
@@ -158,8 +167,11 @@ pub fn compile(prog: &Program) -> Result<String> {
         cmp_decls(&ctx)?,
         cmp_main_loop(&ctx, prog)?,
         cmp_output(&ctx)?,
-    ];
-    Ok(code.join("\n"))
+    ]
+    .join("\n");
+
+    log!("{}", code);
+    Ok(code)
 }
 
 fn make_global_context(prog: &Program) -> Result<Context> {
