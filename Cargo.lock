@@ -243,6 +243,7 @@ dependencies = [
  "maplit",
  "rpds",
  "thiserror",
+ "web-sys",
 ]
 
 [[package]]
